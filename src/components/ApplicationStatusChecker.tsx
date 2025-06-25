@@ -5,67 +5,37 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Search, CheckCircle, Clock, XCircle } from "lucide-react";
-
-interface Registration {
-  id: string;
-  fullName: string;
-  mobileNumber: string;
-  category: string;
-  status: 'pending' | 'approved' | 'rejected';
-  submittedAt: string;
-  uniqueId?: string;
-}
+import { useSupabaseData } from '@/hooks/useSupabaseData';
 
 const ApplicationStatusChecker = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResult, setSearchResult] = useState<Registration | null>(null);
+  const [searchResult, setSearchResult] = useState<any>(null);
   const [notFound, setNotFound] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  
+  const { checkApplicationStatus, categories } = useSupabaseData();
 
-  const categories = [{
-    value: "pennyekart-free",
-    label: "Pennyekart Free Registration"
-  }, {
-    value: "pennyekart-paid",
-    label: "Pennyekart Paid Registration"
-  }, {
-    value: "farmelife",
-    label: "FarmeLife"
-  }, {
-    value: "foodelife",
-    label: "FoodeLife"
-  }, {
-    value: "organelife",
-    label: "OrganeLife"
-  }, {
-    value: "entrelife",
-    label: "EntreLife"
-  }, {
-    value: "job-card",
-    label: "Job Card (All Categories)"
-  }];
-
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (!searchQuery.trim()) return;
+    
     setIsSearching(true);
     setNotFound(false);
     setSearchResult(null);
 
-    // Simulate search delay
-    setTimeout(() => {
-      const registrations = JSON.parse(localStorage.getItem('sedp_registrations') || '[]');
-      const found = registrations.find((reg: Registration) => 
-        reg.mobileNumber === searchQuery.trim() || 
-        reg.uniqueId === searchQuery.trim().toUpperCase()
-      );
+    try {
+      const result = await checkApplicationStatus(searchQuery.trim());
       
-      if (found) {
-        setSearchResult(found);
+      if (result) {
+        setSearchResult(result);
       } else {
         setNotFound(true);
       }
+    } catch (error) {
+      console.error('Search error:', error);
+      setNotFound(true);
+    } finally {
       setIsSearching(false);
-    }, 1000);
+    }
   };
 
   const getStatusMessage = (status: string) => {
@@ -99,6 +69,11 @@ const ApplicationStatusChecker = () => {
           variant: "secondary" as const
         };
     }
+  };
+
+  const getCategoryLabel = (categoryName: string) => {
+    const category = categories.find(cat => cat.name === categoryName);
+    return category?.label || categoryName;
   };
 
   return (
@@ -150,9 +125,9 @@ const ApplicationStatusChecker = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-xl">{searchResult.fullName}</CardTitle>
+                <CardTitle className="text-xl">{searchResult.full_name}</CardTitle>
                 <CardDescription>
-                  {categories.find(cat => cat.value === searchResult.category)?.label}
+                  {getCategoryLabel(searchResult.category)}
                 </CardDescription>
               </div>
               <Badge variant={getStatusMessage(searchResult.status).variant} className="bg-[#078107]">
@@ -175,15 +150,15 @@ const ApplicationStatusChecker = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
               <div>
-                <p><strong>Mobile:</strong> {searchResult.mobileNumber}</p>
-                <p><strong>Applied on:</strong> {new Date(searchResult.submittedAt).toLocaleDateString()}</p>
+                <p><strong>Mobile:</strong> {searchResult.mobile_number}</p>
+                <p><strong>Applied on:</strong> {new Date(searchResult.submitted_at).toLocaleDateString()}</p>
               </div>
               <div>
-                {searchResult.uniqueId && (
-                  <p><strong>Unique ID:</strong> <Badge variant="outline">{searchResult.uniqueId}</Badge></p>
+                {searchResult.unique_id && (
+                  <p><strong>Unique ID:</strong> <Badge variant="outline">{searchResult.unique_id}</Badge></p>
                 )}
                 <p className="text-base font-bold text-[#920202]">
-                  <strong>Category:</strong> {categories.find(cat => cat.value === searchResult.category)?.label}
+                  <strong>Category:</strong> {getCategoryLabel(searchResult.category)}
                 </p>
               </div>
             </div>

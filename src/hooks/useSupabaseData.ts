@@ -1,6 +1,5 @@
-
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, subscribeToRegistrations, subscribeToCategories, subscribeToPanchayaths, subscribeToAnnouncements } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 
@@ -146,7 +145,6 @@ export const useSupabaseData = () => {
             .order('created_at', { ascending: false });
           
           if (notificationsError) throw notificationsError;
-          // Filter and validate target_audience values
           const validNotifications = (notificationsData || []).filter(
             (notif): notif is PushNotification => 
               ['all', 'category', 'panchayath', 'admin'].includes(notif.target_audience)
@@ -166,8 +164,38 @@ export const useSupabaseData = () => {
     }
   };
 
+  // Set up real-time subscriptions
   useEffect(() => {
     fetchData();
+
+    // Subscribe to real-time updates
+    const unsubscribeRegistrations = subscribeToRegistrations((payload) => {
+      console.log('Registration change:', payload);
+      fetchData(); // Refresh all data when registrations change
+    });
+
+    const unsubscribeCategories = subscribeToCategories((payload) => {
+      console.log('Category change:', payload);
+      fetchData(); // Refresh all data when categories change
+    });
+
+    const unsubscribePanchayaths = subscribeToPanchayaths((payload) => {
+      console.log('Panchayath change:', payload);
+      fetchData(); // Refresh all data when panchayaths change
+    });
+
+    const unsubscribeAnnouncements = subscribeToAnnouncements((payload) => {
+      console.log('Announcement change:', payload);
+      fetchData(); // Refresh all data when announcements change
+    });
+
+    // Cleanup subscriptions
+    return () => {
+      unsubscribeRegistrations();
+      unsubscribeCategories();
+      unsubscribePanchayaths();
+      unsubscribeAnnouncements();
+    };
   }, [user, isAdmin]);
 
   // Create registration
@@ -198,7 +226,6 @@ export const useSupabaseData = () => {
         description: "Your registration has been submitted successfully.",
       });
 
-      await fetchData(); // Refresh data
       return data;
     } catch (error) {
       console.error('Error creating registration:', error);
@@ -244,7 +271,6 @@ export const useSupabaseData = () => {
         description: `Registration has been ${status}.`,
       });
 
-      await fetchData(); // Refresh data
       return true;
     } catch (error) {
       console.error('Error updating registration:', error);
@@ -281,7 +307,6 @@ export const useSupabaseData = () => {
         description: "Registration has been deleted successfully.",
       });
 
-      await fetchData(); // Refresh data
       return true;
     } catch (error) {
       console.error('Error deleting registration:', error);
@@ -291,6 +316,26 @@ export const useSupabaseData = () => {
         variant: "destructive",
       });
       return false;
+    }
+  };
+
+  // Check application status by mobile number or unique ID
+  const checkApplicationStatus = async (searchQuery: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('registrations')
+        .select('*')
+        .or(`mobile_number.eq.${searchQuery},unique_id.eq.${searchQuery.toUpperCase()}`)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error checking application status:', error);
+      return null;
     }
   };
 
@@ -305,6 +350,7 @@ export const useSupabaseData = () => {
     createRegistration,
     updateRegistrationStatus,
     deleteRegistration,
+    checkApplicationStatus,
     refreshData: fetchData,
   };
 };
